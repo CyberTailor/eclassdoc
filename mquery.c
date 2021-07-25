@@ -273,6 +273,11 @@ global_query(struct roff_node *mdoc, char opt)
 	case 'a':
 		nfound = first_node_by_name(mdoc, "AUTHORS", 1);
 		return deroff_print(nfound->body);
+	/* reporting bugs */
+	case 'b':
+		nfound = first_node_by_name(mdoc, "REPORTING BUGS", 1);
+		nfound = first_node_by_macro(nfound->body, MDOC_Lk, 1);
+		return deroff_print(nfound->child);
 	/* maintainers */
 	case 'm':
 		nfound = first_node_by_name(mdoc, "MAINTAINERS", 1);
