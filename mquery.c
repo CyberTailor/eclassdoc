@@ -37,6 +37,11 @@ enum	mquerylevel {
 	MQUERYLEVEL_MAX
 };
 
+struct	enclosure {
+	const char	*before;
+	const char	*after;
+};
+
 int	global_query(struct roff_node *mdoc, char opt);
 int	function_query(struct roff_node *mdoc, const char *funcname, char opt);
 int	variable_query(struct roff_node *mdoc, const char *varname, char opt);
@@ -45,7 +50,8 @@ int	print_item_heads(struct roff_node *n, enum roff_tok macro, int errflag);
 int	print_item_bodies(struct roff_node *n, enum roff_tok macro,
 		const char prepend_text[], int errflag);
 
-int	deroff_print(const struct roff_node *n);
+static void	pstring(const char *p, int flags);
+int		deroff_print(const struct roff_node *n);
 
 struct roff_node	*first_node_by_macro(struct roff_node *n,
 				enum roff_tok macro, int errflag);
@@ -107,43 +113,136 @@ first_node_by_name(struct roff_node *n, const char section_name[], int errflag)
 }
 
 /*
- * Dumb reimplementation of deroff().
+ * Strip the escapes out of a string, emitting the results.
+ */
+static void
+pstring(const char *p, int flags)
+{
+	char		last_ch = '\0';
+	enum mandoc_esc	esc;
+
+	/* strip spaces at the beginning of line */
+	while (' ' == *p) {
+		if ((flags & NODE_NOFILL) != 0)
+			putchar((unsigned char )*p);
+		p++;
+	}
+
+	while ('\0' != *p)
+		if ('\\' == *p) {
+			p++;
+			esc = mandoc_escape(&p, NULL, NULL);
+			if (ESCAPE_ERROR == esc)
+				break;
+		} else {
+			/* strip last space at the end of line */
+			if ('\0' == *(p+1) && ' ' == *p)
+				break;
+			/* strip consecutive spaces */
+			if (' ' == last_ch && ' ' == *p)
+				if ((flags & NODE_NOFILL) != 0) {
+					p++;
+					continue;
+				}
+			last_ch = *p;
+			putchar((unsigned char )*p++);
+		}
+}
+
+/*
+ * Lame and buggy as hell reimplementation of deroff().
  */
 int
 deroff_print(const struct roff_node *n)
 {
-	const char	*format = "%s ";
-	assert(n);
+	enum roff_type		ntype;
+	struct enclosure	enc_text = { "", "" },
+				enc_macro = { " ", " " };
 
-	if (n->type != ROFFT_TEXT) {
-		switch (n->tok) {
+	assert(n);
+	assert(n->parent);
+
+	if ((n->flags & NODE_NOPRT) != 0)
+		return (int)MQUERYLEVEL_OK;
+
+	switch (n->tok) {
+		/* handle '.An -split' */
+		case MDOC_An:
+			enc_macro.before = "";
+			if (n->child == NULL) {
+				enc_macro.after = "";
+			}
+			break;
+		/* print each author on a separate line */
+		case MDOC_Aq:
+			enc_macro.before = "<";
+			enc_macro.after = ">\n";
+			break;
+		/* two newlines and @CODE before display blocks */
+		case MDOC_Bd:
+			enc_macro.before = "\n\n@CODE\n";
+			enc_macro.after = "@CODE\n";
+			break;
 		/* replace .Pp with two newlines */
 		case MDOC_Pp:
-			puts("\n");
+			enc_macro.before = "\n";
+			enc_macro.after = "\n";
+			break;
+		case MDOC_Pq:
+			enc_macro.before = " (";
+			enc_macro.after = ") ";
+			break;
+		/* keep spacing for inlined macros */
+		case MDOC_Nm:
+		case MDOC_Pa:
 			break;
 		default:
-			for (n = n->child; n != NULL; n = n->next)
-				deroff_print(n);
-		}
+			if ((n->flags & NODE_LINE) != 0 || n->parent->tok == MDOC_It)
+				enc_macro.before = "";
+			break;
+	}
+
+	switch (n->parent->tok) {
+		case MDOC_Aq:
+			enc_macro.before = "";
+			enc_macro.after = "";
+			break;
+		default:
+			break;
+	}
+
+	ntype = n->type;
+	if (ntype != ROFFT_TEXT) {
+		if (ntype == ROFFT_BLOCK || ntype == ROFFT_ELEM)
+			fputs(enc_macro.before, stdout);
+
+		for (n = n->child; n != NULL; n = n->next)
+			deroff_print(n);
+
+		if (ntype == ROFFT_BLOCK || ntype == ROFFT_ELEM)
+			fputs(enc_macro.after, stdout);
 
 		return (int)MQUERYLEVEL_OK;
 	}
 
-	/* do not print trailing space before newline and EOF */
+	/* do not print trailing space before newline */
 	if (n->next == NULL && n->parent->next != NULL)
 		if (n->parent->next->tok == MDOC_Pp)
-			format = "%s";
-	/* print each author on a separate line */
-	if (n->parent->tok == MDOC_Mt)
-		format = "<%s>\n";
+			enc_text.after = "";
 	/* print link's description in parentheses */
-	if (n->parent->tok == MDOC_Lk && n->prev != NULL)
-		format = "(%s)";
+	if (n->parent->tok == MDOC_Lk && n->prev != NULL) {
+		enc_text.before = " (";
+		enc_text.after = ")";
+	}
+	/* handle display blocks */
+	if (n->flags & NODE_NOFILL)
+		enc_text.after = "\n";
 
-	if ((printf(format, n->string)) >= 0)
-		return (int)MQUERYLEVEL_OK;
+	fputs(enc_text.before, stdout);
+	pstring(n->string, n->flags);
+	fputs(enc_text.after, stdout);
 
-	err((int)MQUERYLEVEL_SYSERR, "%d:%d", n->line, n->pos);
+	return (int)MQUERYLEVEL_OK;
 }
 
 /*
@@ -281,6 +380,10 @@ global_query(struct roff_node *mdoc, char opt)
 	/* deprecation check */
 	case 'd':
 		nfound = first_node_by_name(mdoc, "DEPRECATED", 1);
+		return deroff_print(nfound->body);
+	/* examples */
+	case 'e':
+		nfound = first_node_by_name(mdoc, "EXAMPLES", 1);
 		return deroff_print(nfound->body);
 	/* maintainers */
 	case 'm':

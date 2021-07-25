@@ -43,7 +43,7 @@ tag
 .It Fl D
 Emit the contents of the
 .Sy DESCRIPTION
-section without any formatting.
+section.
 Any named links in the
 .Sy SEE ALSO
 section will be listed under the
@@ -66,7 +66,7 @@ Parse the
 section and print newline-separated list of authors.
 .
 .It Fl b
-Print an URL of the first link found in the
+Print a URL of the first link found in the
 .Sy REPORTING BUGS
 section.
 .
@@ -80,7 +80,7 @@ and exit with code 0.
 .It Fl e
 Emit the contents of the
 .Sy EXAMPLES
-section without any formatting.
+section.
 .
 .It Fl m
 Parse the
@@ -102,4 +102,15 @@ utility exits 0 on success, 1 if a section does not exist, and >1 if an error 
 .Em .Pp
 macros are interpreted as two line breaks.
 .Pp
-The output contains trailing spaces.
+.Ql @CODE
+tags are created automatically from
+.Em .Bd
+macros.
+.Pp
+Long lines are not wrapped.
+.Sh BUGS
+Many.
+Most notably in
+.Fn deroff_print .
+.Pp
+The output may contain trailing spaces and even weirder things.
