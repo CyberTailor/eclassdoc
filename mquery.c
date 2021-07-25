@@ -41,11 +41,97 @@ int	variable_query(struct roff_node *mdoc, const char *varname,
 			int q_description, int q_deprecated, int q_eprefix,
 			int q_output, int q_preinherit, int q_required, int q_user);
 
+int	deroff_print(const struct roff_node *n);
+
+struct roff_node	*first_node_by_macro(struct roff_node *n,
+				enum roff_tok macro, int errflag);
+struct roff_node	*first_node_by_name(struct roff_node *n,
+				const char section_name[], int errflag);
+
+/*
+ * Search for macro name recursively.
+ */
+struct roff_node *
+first_node_by_macro(struct roff_node *n, enum roff_tok macro, int errflag)
+{
+	struct roff_node	*nfound;
+
+	if (n == NULL)
+		return NULL;
+
+	for (; n != NULL; n = n->child) {
+		if (n->tok == macro)
+			return n;
+
+		nfound = first_node_by_macro(n->next, macro, 0);
+		if (nfound != NULL)
+			return nfound;
+	}
+
+	if (!errflag)
+		return NULL;
+	errx((int)MQUERYLEVEL_NOTFOUND, "macro %d not found", macro);
+}
+
+/*
+ * Search for header text recursively.
+ */
+struct roff_node *
+first_node_by_name(struct roff_node *n, const char section_name[], int errflag)
+{
+	struct roff_node	*nfound;
+	char			*head_text = NULL;
+
+	for (; n != NULL; n = n->child) {
+		if(n->head != NULL) {
+			deroff(&head_text, n->head);
+			if (head_text != NULL && strcmp(head_text, section_name) == 0)
+				return n;
+		}
+
+		nfound = first_node_by_name(n->next, section_name, 0);
+		if (nfound != NULL)
+			return nfound;
+	}
+
+	if (!errflag)
+		return NULL;
+	errx((int)MQUERYLEVEL_NOTFOUND, "section not found: %s", section_name);
+}
+
+/*
+ * Dumb deroff(), does not strip whitespace.
+ * Replaces .Pp with two newlines.
+ */
+int
+deroff_print(const struct roff_node *n)
+{
+	if (n->type != ROFFT_TEXT) {
+		if (n->tok == MDOC_Pp)
+			puts("\n");
+		for (n = n->child; n != NULL; n = n->next)
+			deroff_print(n);
+		return (int)MQUERYLEVEL_OK;
+	}
+
+	if ((printf("%s ", n->string)) >= 0)
+		return (int)MQUERYLEVEL_OK;
+
+	err((int)MQUERYLEVEL_SYSERR, "%d:%d", n->line, n->pos);
+}
+
 int
 global_query(struct roff_node *mdoc, int q_blurb, int q_description,
 		int q_funcs, int q_vars, int q_authors, int q_bugs,
 		int q_deprecated, int q_examples, int q_maintainers)
 {
+	struct roff_node	*nfound;
+
+	if (q_blurb) {
+		nfound = first_node_by_name(mdoc, "NAME", 1);
+		nfound = first_node_by_macro(nfound->body, MDOC_Nd, 1);
+		return deroff_print(nfound);
+	}
 	errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
 }
 
