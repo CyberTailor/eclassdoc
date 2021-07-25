@@ -41,6 +41,7 @@ int	variable_query(struct roff_node *mdoc, const char *varname,
 			int q_description, int q_deprecated, int q_eprefix,
 			int q_output, int q_preinherit, int q_required, int q_user);
 
+int	print_item_heads(struct roff_node *n, enum roff_tok macro, int errflag);
 int	print_item_bodies(struct roff_node *n, enum roff_tok macro,
 		const char prepend_text[], int errflag);
 
@@ -124,6 +125,40 @@ deroff_print(const struct roff_node *n)
 }
 
 /*
+ * Used to print lists of functions and variables.
+ * Expects '.Bl' list's body and name of the macro following '.It'.
+ * This function is not recursive.
+ */
+int
+print_item_heads(struct roff_node *n, enum roff_tok macro, int errflag)
+{
+	const struct roff_node *element;
+	int			found = 0;
+
+	for (n = n->child; n != NULL; n = n->next) {
+		if (n->tok != MDOC_It)
+			continue; /* mandoc -Tlint will give a warning */
+
+		element = n->head->child;
+		if (element == NULL) {
+			warnx("%d:%d: empty item header", n->line, n->pos);
+			continue;
+		}
+
+		if (element->tok != macro)
+			continue;
+
+		found = 1;
+		deroff_print(element);
+		puts("");
+	}
+
+	if (!found && errflag)
+		errx((int)MQUERYLEVEL_NOTFOUND, "no matching items found");
+	return (int)MQUERYLEVEL_OK;
+}
+
+/*
  * Used to print links from the "See also" section.
  * Expects '.Bl' list's body and name of the macro following '.It'.
  * This function is not recursive.
@@ -191,6 +226,11 @@ global_query(struct roff_node *mdoc, int q_blurb, int q_description,
 						 "\n\nReferences:\n", 0);
 		}
 		return (int)MQUERYLEVEL_OK;
+	}
+	if (q_funcs) {
+		nfound = first_node_by_name(mdoc, "FUNCTIONS", 1);
+		nfound = first_node_by_macro(nfound->body, MDOC_Bl, 1);
+		return print_item_heads(nfound->body, MDOC_Ic, 1);
 	}
 	errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
 }
