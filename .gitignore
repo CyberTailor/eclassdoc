@@ -1,0 +1,10 @@
+*~
+*.5
+*.o
+*.pyc
+*.swp
+libmandoc.a
+mquery
+mquery-function
+mquery-variable
+tags

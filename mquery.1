@@ -1,0 +1,105 @@
+.\" SPDX-FileType: DOCUMENTATION
+.\" SPDX-License-Identifier: FSFAP
+.\" SPDX-FileCopyrightText: 2021 Anna “CyberTailor” <cyber@sysrq.in>
+.\"
+.\" Copying and distribution of this file, with or without modification, are
+.\" permitted in any medium without royalty, provided the copyright notice and
+.\" this notice are preserved. This file is offered as-is, without any warranty.
+.Dd July 23, 2021
+.Dt MQUERY 1
+.Os
+.Sh NAME
+.Nm mquery
+.Nd parse global scope of eclass manual pages
+.Sh SYNOPSIS
+.Nm
+.Bk -words
+.Ar file
+.Fl B | D | F | V | a | b | d | e | m
+.Ek
+.Sh DESCRIPTION
+The
+.Nm
+helper utility parses
+.Xr mdoc 7
+manual pages and generates data, suitable for the top-level eclass documentation block or further parsing.
+.Pp
+The arguments are as follows:
+.Bl -tag -width Ds
+.It Ar file
+An
+.Xr mdoc 7 Ns
+-formatted manpage to query.
+.
+.It Fl B
+Print the value of the
+.Em .Nd
+macro
+.Po to be later used in the
+.Ql @BLURB
+tag
+.Pc .
+.
+.It Fl D
+Emit the contents of the
+.Sy DESCRIPTION
+section without any formatting.
+Any named links in the
+.Sy SEE ALSO
+section will be listed under the
+.Qq References:
+subtitile.
+.
+.It Fl F
+Parse the
+.Sy FUNCTIONS
+section and print newline-separated list of all documented functions.
+.
+.It Fl V
+Parse the
+.Sy ECLASS VARIABLES
+section and print newline-separated list of all documented eclass variables.
+.
+.It Fl a
+Parse the
+.Sy AUTHORS
+section and print newline-separated list of authors.
+.
+.It Fl b
+Emit the contents of the
+.Sy REPORTING BUGS
+section without any formatting.
+.
+.It Fl d
+If the
+.Sy DEPRECATED
+section exists, print its optional contents
+.Pq replacement eclass
+and exit with code 0.
+.
+.It Fl e
+Emit the contents of the
+.Sy EXAMPLES
+section without any formatting.
+.
+.It Fl m
+Parse the
+.Sy MAINTAINERS
+section and print newline-separated list of maintainers.
+.El
+.Sh EXIT STATUS
+The
+.Nm
+utility exits 0 on success, 1 if a section does not exist, and >1 if an error occurs.
+.Sh SEE ALSO
+.Xr mquery-function 1 ,
+.Xr mquery-variable 1
+.Sh AUTHORS
+.An -split
+.An Anna Qq CyberTailor
+.Aq Mt cyber@sysrq.in
+.Sh CAVEATS
+.Em .Pp
+macros are interpreted as two line breaks.
+.Pp
+The output contains trailing spaces.
