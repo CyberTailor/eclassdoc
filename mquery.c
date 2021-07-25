@@ -41,6 +41,9 @@ int	variable_query(struct roff_node *mdoc, const char *varname,
 			int q_description, int q_deprecated, int q_eprefix,
 			int q_output, int q_preinherit, int q_required, int q_user);
 
+int	print_item_bodies(struct roff_node *n, enum roff_tok macro,
+		const char prepend_text[], int errflag);
+
 int	deroff_print(const struct roff_node *n);
 
 struct roff_node	*first_node_by_macro(struct roff_node *n,
@@ -120,6 +123,51 @@ deroff_print(const struct roff_node *n)
 	err((int)MQUERYLEVEL_SYSERR, "%d:%d", n->line, n->pos);
 }
 
+/*
+ * Used to print links from the "See also" section.
+ * Expects '.Bl' list's body and name of the macro following '.It'.
+ * This function is not recursive.
+ */
+int
+print_item_bodies(struct roff_node *n, enum roff_tok macro,
+		const char prepend_text[], int errflag)
+{
+	const struct roff_node *element;
+	int			found = 0;
+
+	for (n = n->child; n != NULL; n = n->next) {
+		if (n->tok != MDOC_It)
+			continue; /* mandoc -Tlint will give a warning */
+
+		element = n->body->child;
+		if (element == NULL) {
+			warnx("%d:%d: empty item body", n->line, n->pos);
+			continue;
+		}
+		
+		if (element->tok != macro)
+			continue;
+
+		/*
+		 * special case for links - skip links without text
+		 */
+		if (element->tok == MDOC_Lk && element->child->next == NULL)
+			continue;
+
+		if (!found) {
+			printf("%s", prepend_text);
+			found = 1;
+		}
+
+		deroff_print(element);
+		puts("");
+	}
+
+	if (!found && errflag)
+		errx((int)MQUERYLEVEL_NOTFOUND, "no matching items found");
+	return (int)MQUERYLEVEL_OK;
+}
+
 int
 global_query(struct roff_node *mdoc, int q_blurb, int q_description,
 		int q_funcs, int q_vars, int q_authors, int q_bugs,
@@ -131,6 +179,18 @@ global_query(struct roff_node *mdoc, int q_blurb, int q_description,
 		nfound = first_node_by_name(mdoc, "NAME", 1);
 		nfound = first_node_by_macro(nfound->body, MDOC_Nd, 1);
 		return deroff_print(nfound);
+	}
+	if (q_description) {
+		nfound = first_node_by_name(mdoc, "DESCRIPTION", 1);
+		deroff_print(nfound->body);
+
+		nfound = first_node_by_name(mdoc, "SEE ALSO", 0);
+		if (nfound != NULL) {
+			nfound = first_node_by_macro(nfound->body, MDOC_Bl, 1);
+			return print_item_bodies(nfound->body, MDOC_Lk,
+						 "\n\nReferences:\n", 0);
+		}
+		return (int)MQUERYLEVEL_OK;
 	}
 	errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
 }
