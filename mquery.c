@@ -21,6 +21,12 @@
 
 extern char	*program_invocation_short_name;
 
+#define		 VAR_SUB_COUNT 4
+const char	*var_subsections[VAR_SUB_COUNT] = { "Required variables",
+						    "Optional variables",
+						    "Output variables",
+						    "User variables" };
+
 enum	mquerylevel {
 	MQUERYLEVEL_OK = 0, /* succesful query */
 	MQUERYLEVEL_NOTFOUND, /* unsuccessful query */
@@ -86,10 +92,13 @@ first_node_by_name(struct roff_node *n, const char section_name[], int errflag)
 	struct roff_node	*nfound;
 	char			*head_text = NULL;
 
+	if (n == NULL)
+		return NULL;
+
 	for (; n != NULL; n = n->child) {
 		if(n->head != NULL) {
 			deroff(&head_text, n->head);
-			if (head_text != NULL && strcmp(head_text, section_name) == 0)
+			if (head_text != NULL && strcasecmp(head_text, section_name) == 0)
 				return n;
 		}
 
@@ -110,6 +119,8 @@ first_node_by_name(struct roff_node *n, const char section_name[], int errflag)
 int
 deroff_print(const struct roff_node *n)
 {
+	assert(n);
+
 	if (n->type != ROFFT_TEXT) {
 		if (n->tok == MDOC_Pp)
 			puts("\n");
@@ -135,6 +146,7 @@ print_item_heads(struct roff_node *n, enum roff_tok macro, int errflag)
 	const struct roff_node *element;
 	int			found = 0;
 
+	assert(n);
 	for (n = n->child; n != NULL; n = n->next) {
 		if (n->tok != MDOC_It)
 			continue; /* mandoc -Tlint will give a warning */
@@ -170,6 +182,7 @@ print_item_bodies(struct roff_node *n, enum roff_tok macro,
 	const struct roff_node *element;
 	int			found = 0;
 
+	assert(n);
 	for (n = n->child; n != NULL; n = n->next) {
 		if (n->tok != MDOC_It)
 			continue; /* mandoc -Tlint will give a warning */
@@ -179,7 +192,7 @@ print_item_bodies(struct roff_node *n, enum roff_tok macro,
 			warnx("%d:%d: empty item body", n->line, n->pos);
 			continue;
 		}
-		
+
 		if (element->tok != macro)
 			continue;
 
@@ -208,7 +221,7 @@ global_query(struct roff_node *mdoc, int q_blurb, int q_description,
 		int q_funcs, int q_vars, int q_authors, int q_bugs,
 		int q_deprecated, int q_examples, int q_maintainers)
 {
-	struct roff_node	*nfound;
+	struct roff_node	*nfound, *nvars;
 
 	if (q_blurb) {
 		nfound = first_node_by_name(mdoc, "NAME", 1);
@@ -231,6 +244,20 @@ global_query(struct roff_node *mdoc, int q_blurb, int q_description,
 		nfound = first_node_by_name(mdoc, "FUNCTIONS", 1);
 		nfound = first_node_by_macro(nfound->body, MDOC_Bl, 1);
 		return print_item_heads(nfound->body, MDOC_Ic, 1);
+	}
+	if (q_vars) {
+		nvars = first_node_by_name(mdoc, "ECLASS VARIABLES", 1);
+		for (int i = 0; i < VAR_SUB_COUNT; ++i) {
+			nfound = first_node_by_name(mdoc, var_subsections[i], 0);
+			if (nfound == NULL)
+				continue;
+
+			nfound = first_node_by_macro(nfound->body, MDOC_Bl, 1);
+			print_item_heads(nfound->body, MDOC_Ev, 0);
+			print_item_heads(nfound->body, MDOC_Dv, 0);
+			print_item_heads(nfound->body, MDOC_Va, 0);
+		}
+		return (int)MQUERYLEVEL_OK;
 	}
 	errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
 }
