@@ -29,8 +29,8 @@ const char	*var_subsections[VAR_SUB_COUNT] = { "Required variables",
 
 enum	mquerylevel {
 	MQUERYLEVEL_OK = 0, /* succesful query */
-	MQUERYLEVEL_NOTFOUND, /* unsuccessful query */
-	MQUERYLEVEL_ERROR, /* invalid document */
+	MQUERYLEVEL_NOTFOUND, /* failed query */
+	MQUERYLEVEL_ERROR,  /* invalid input document */
 	MQUERYLEVEL_UNSUPP, /* input needs unimplemented features */
 	MQUERYLEVEL_BADARG, /* bad argument in invocation */
 	MQUERYLEVEL_SYSERR, /* system error */
@@ -107,23 +107,40 @@ first_node_by_name(struct roff_node *n, const char section_name[], int errflag)
 }
 
 /*
- * Dumb deroff(), does not strip whitespace.
- * Replaces .Pp with two newlines.
+ * Dumb reimplementation of deroff().
  */
 int
 deroff_print(const struct roff_node *n)
 {
+	const char	*format = "%s ";
 	assert(n);
 
 	if (n->type != ROFFT_TEXT) {
-		if (n->tok == MDOC_Pp)
+		switch (n->tok) {
+		/* replace .Pp with two newlines */
+		case MDOC_Pp:
 			puts("\n");
-		for (n = n->child; n != NULL; n = n->next)
-			deroff_print(n);
+			break;
+		default:
+			for (n = n->child; n != NULL; n = n->next)
+				deroff_print(n);
+		}
+
 		return (int)MQUERYLEVEL_OK;
 	}
 
-	if ((printf("%s ", n->string)) >= 0)
+	/* do not print trailing space before newline and EOF */
+	if (n->next == NULL && n->parent->next != NULL)
+		if (n->parent->next->tok == MDOC_Pp)
+			format = "%s";
+	/* print each author on a separate line */
+	if (n->parent->tok == MDOC_Mt)
+		format = "<%s>\n";
+	/* print link's description in parentheses */
+	if (n->parent->tok == MDOC_Lk && n->prev != NULL)
+		format = "(%s)";
+
+	if ((printf(format, n->string)) >= 0)
 		return (int)MQUERYLEVEL_OK;
 
 	err((int)MQUERYLEVEL_SYSERR, "%d:%d", n->line, n->pos);
@@ -247,11 +264,19 @@ global_query(struct roff_node *mdoc, char opt)
 				continue;
 
 			nfound = first_node_by_macro(nfound->body, MDOC_Bl, 1);
-			print_item_heads(nfound->body, MDOC_Ev, 0);
 			print_item_heads(nfound->body, MDOC_Dv, 0);
+			print_item_heads(nfound->body, MDOC_Ev, 0);
 			print_item_heads(nfound->body, MDOC_Va, 0);
 		}
 		return (int)MQUERYLEVEL_OK;
+	/* authors */
+	case 'a':
+		nfound = first_node_by_name(mdoc, "AUTHORS", 1);
+		return deroff_print(nfound->body);
+	/* maintainers */
+	case 'm':
+		nfound = first_node_by_name(mdoc, "MAINTAINERS", 1);
+		return deroff_print(nfound->body);
 	default:
 		errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
 	}
