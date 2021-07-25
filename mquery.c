@@ -37,15 +37,9 @@ enum	mquerylevel {
 	MQUERYLEVEL_MAX
 };
 
-int	global_query(struct roff_node *mdoc, int q_blurb, int q_description,
-			int q_funcs, int q_vars, int q_authors, int q_bugs,
-			int q_deprecated, int q_examples, int q_maintainers);
-int	function_query(struct roff_node *mdoc, const char *funcname,
-			int q_description, int q_deprecated, int q_eprefix,
-			int q_return, int q_usage);
-int	variable_query(struct roff_node *mdoc, const char *varname,
-			int q_description, int q_deprecated, int q_eprefix,
-			int q_output, int q_preinherit, int q_required, int q_user);
+int	global_query(struct roff_node *mdoc, char opt);
+int	function_query(struct roff_node *mdoc, const char *funcname, char opt);
+int	variable_query(struct roff_node *mdoc, const char *varname, char opt);
 
 int	print_item_heads(struct roff_node *n, enum roff_tok macro, int errflag);
 int	print_item_bodies(struct roff_node *n, enum roff_tok macro,
@@ -217,18 +211,18 @@ print_item_bodies(struct roff_node *n, enum roff_tok macro,
 }
 
 int
-global_query(struct roff_node *mdoc, int q_blurb, int q_description,
-		int q_funcs, int q_vars, int q_authors, int q_bugs,
-		int q_deprecated, int q_examples, int q_maintainers)
+global_query(struct roff_node *mdoc, char opt)
 {
 	struct roff_node	*nfound, *nvars;
 
-	if (q_blurb) {
+	switch (opt) {
+	/* blurb */
+	case 'B':
 		nfound = first_node_by_name(mdoc, "NAME", 1);
 		nfound = first_node_by_macro(nfound->body, MDOC_Nd, 1);
 		return deroff_print(nfound);
-	}
-	if (q_description) {
+	/* description */
+	case 'D':
 		nfound = first_node_by_name(mdoc, "DESCRIPTION", 1);
 		deroff_print(nfound->body);
 
@@ -239,13 +233,13 @@ global_query(struct roff_node *mdoc, int q_blurb, int q_description,
 						 "\n\nReferences:\n", 0);
 		}
 		return (int)MQUERYLEVEL_OK;
-	}
-	if (q_funcs) {
+	/* function list */
+	case 'F':
 		nfound = first_node_by_name(mdoc, "FUNCTIONS", 1);
 		nfound = first_node_by_macro(nfound->body, MDOC_Bl, 1);
 		return print_item_heads(nfound->body, MDOC_Ic, 1);
-	}
-	if (q_vars) {
+	/* eclass variable list */
+	case 'V':
 		nvars = first_node_by_name(mdoc, "ECLASS VARIABLES", 1);
 		for (int i = 0; i < VAR_SUB_COUNT; ++i) {
 			nfound = first_node_by_name(mdoc, var_subsections[i], 0);
@@ -258,23 +252,27 @@ global_query(struct roff_node *mdoc, int q_blurb, int q_description,
 			print_item_heads(nfound->body, MDOC_Va, 0);
 		}
 		return (int)MQUERYLEVEL_OK;
+	default:
+		errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
 	}
-	errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
 }
 
 int
-function_query(struct roff_node *mdoc, const char *funcname, int q_description,
-		int q_deprecated, int q_eprefix, int q_return, int q_usage)
+function_query(struct roff_node *mdoc, const char *funcname, char opt)
 {
-	errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
+	switch (opt) {
+	default:
+		errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
+	}
 }
 
 int
-variable_query(struct roff_node *mdoc, const char *varname, int q_description,
-		int q_deprecated, int q_eprefix, int q_output,
-		int q_preinherit, int q_required, int q_user)
+variable_query(struct roff_node *mdoc, const char *varname, char opt)
 {
-	errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
+	switch (opt) {
+	default:
+		errx((int)MQUERYLEVEL_UNSUPP, "option is not implemented");
+	}
 }
 
 int
@@ -282,15 +280,13 @@ main(int argc, char *argv[])
 {
 	struct roff_meta       *meta;
 	struct mparse	       *mp;
-	const char	       *fnin = NULL, *funcname = NULL, *varname = NULL,
-			       *optstring = "BDFVabdem";
-	int			Bflag = 0, Dflag = 0, Fflag = 0, Vflag = 0,
-				aflag = 0, bflag = 0, dflag = 0, eflag = 0,
-				iflag = 0, mflag = 0, oflag = 0, pflag = 0,
-				rflag = 0, uflag = 0, flagc = 0, ch, fd,
-				functionq = 0, variableq = 0,
-				exit_status = (int)MQUERYLEVEL_ERROR;
+	const char	       *fnin = NULL, *itemname = NULL, *optstring;
+	int			functionq, variableq, flagc, fd, exit_status;
+	char			ch, flag = '\0';
 
+	functionq = 0;
+	variableq = 0;
+	optstring = "BDFVabdem";
 	if (strcasecmp(program_invocation_short_name, "mquery-function") == 0) {
 		functionq = 1;
 		optstring = "DdiruF:";
@@ -300,35 +296,35 @@ main(int argc, char *argv[])
 		optstring = "DdiopruV:";
 	}
 
+	flagc = 0;
 	while ((ch = getopt(argc, argv, optstring)) != -1) {
 		switch (ch) {
-			break; case 'F':
-				if (functionq)
-					funcname = optarg;
-				else {
-					Fflag = 1;
-					++flagc;
-				}
-			break; case 'V':
-				if (variableq)
-					varname = optarg;
-				else {
-					Vflag = 1;
-					++flagc;
-				}
-			break; case 'B': Bflag = 1; ++flagc;
-			break; case 'D': Dflag = 1; ++flagc;
-			break; case 'a': aflag = 1; ++flagc;
-			break; case 'b': bflag = 1; ++flagc;
-			break; case 'd': dflag = 1; ++flagc;
-			break; case 'i': iflag = 1; ++flagc;
-			break; case 'e': eflag = 1; ++flagc;
-			break; case 'm': mflag = 1; ++flagc;
-			break; case 'o': oflag = 1; ++flagc;
-			break; case 'p': pflag = 1; ++flagc;
-			break; case 'r': rflag = 1; ++flagc;
-			break; case 'u': uflag = 1; ++flagc;
-			break; default: goto usage;
+		case 'B':
+		case 'D':
+		case 'a':
+		case 'b':
+		case 'd':
+		case 'i':
+		case 'e':
+		case 'm':
+		case 'o':
+		case 'p':
+		case 'r':
+		case 'u':
+			flag = ch;
+			++flagc;
+			break;
+		case 'F':
+		case 'V':
+			if (functionq || variableq)
+				itemname = optarg;
+			else {
+				flag = ch;
+				++flagc;
+			}
+			break;
+		default:
+			goto usage;
 		}
 	}
 
@@ -336,6 +332,8 @@ main(int argc, char *argv[])
 	argv += optind;
 
 	if (argc != 1 || flagc != 1)
+		goto usage;
+	if (itemname == NULL && (functionq || variableq))
 		goto usage;
 
 	mchars_alloc();
@@ -356,13 +354,10 @@ main(int argc, char *argv[])
 		errx((int)MQUERYLEVEL_ERROR, "not an mdoc document: %s", fnin);
 
 	if (functionq)
-		exit_status = function_query(meta->first, funcname, Dflag,
-					     dflag, iflag, rflag, uflag);
+		exit_status = function_query(meta->first->child, itemname, flag);
 	if (variableq)
-		exit_status = variable_query(meta->first, varname, Dflag, dflag,
-				             iflag, oflag, pflag, rflag, uflag);
-	exit_status = global_query(meta->first, Bflag, Dflag, Fflag, Vflag,
-				   aflag, bflag, dflag, eflag, mflag);
+		exit_status = variable_query(meta->first->child, itemname, flag);
+	exit_status = global_query(meta->first->child, flag);
 
 	mparse_free(mp);
 	mchars_free();
