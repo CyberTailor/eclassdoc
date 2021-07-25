@@ -278,6 +278,10 @@ global_query(struct roff_node *mdoc, char opt)
 		nfound = first_node_by_name(mdoc, "REPORTING BUGS", 1);
 		nfound = first_node_by_macro(nfound->body, MDOC_Lk, 1);
 		return deroff_print(nfound->child);
+	/* deprecation check */
+	case 'd':
+		nfound = first_node_by_name(mdoc, "DEPRECATED", 1);
+		return deroff_print(nfound->body);
 	/* maintainers */
 	case 'm':
 		nfound = first_node_by_name(mdoc, "MAINTAINERS", 1);
